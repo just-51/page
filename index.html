@@ -1,0 +1,225 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>视频播放页</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #000;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 16px;
+      margin-bottom: 20px;
+      text-align: center;
+      opacity: 0.7;
+    }
+    .video-container {
+      position: relative;
+      width: 100%;
+      max-width: 90vw;
+    }
+    video {
+      width: 100%;
+      height: auto;
+      border-radius: 12px;
+      background: #000;
+    }
+    .loading-overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      color: white;
+      font-size: 14px;
+      pointer-events: none;
+    }
+    .spinner {
+      border: 4px solid rgba(255,255,255,0.2);
+      border-left-color: #00ff88;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 10px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .video-list {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 20px;
+      gap: 10px;
+    }
+    .video-button {
+      padding: 10px 16px;
+      font-size: 15px;
+      border: none;
+      border-radius: 8px;
+      background-color: #333;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    .video-button:hover {
+      background-color: #555;
+    }
+    .video-button.active {
+      background-color: #00c300;
+    }
+  </style>
+  <script src="./js/hls.min.js"></script>
+</head>
+<body>
+
+<h1>🎬 请勿相信视频中的广告</h1>
+
+<div class="video-container">
+  <video id="video" playsinline webkit-playsinline preload="auto" poster="loading.jpg" controls></video>
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    正在加载视频...
+  </div>
+</div>
+
+<div class="video-list" id="videoList">
+  <button class="video-button" data-enc="aHR0cHM6Ly92MjAyNS5maGJiZmYuY29tLzIwMjUwNjI5L2hBN2l0blVkL2luZGV4Lm0zdTg=">成宮はるあ特辑</button>
+  <button class="video-button" data-enc="aHR0cHM6Ly92MjAyNC5maGJiZmYuY29tLzIwMjQxMTE5L2dvbGp6a2lNL2luZGV4Lm0zdTg=">两个辣妹</button>
+</div>
+
+<script>
+  const video = document.getElementById('video');
+  const buttons = document.querySelectorAll('.video-button');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  let hls = null;
+  let saveInterval = null;
+
+  function isIOS() {
+    return /iP(hone|od|ad)/.test(navigator.userAgent);
+  }
+
+  function saveProgress(url, time) {
+    localStorage.setItem("progress_" + url, time.toFixed(1));
+  }
+
+  function loadProgress(url) {
+    const t = parseFloat(localStorage.getItem("progress_" + url));
+    return isNaN(t) ? 0 : t;
+  }
+
+  function setActiveButton(enc) {
+    buttons.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.enc.trim() === enc);
+    });
+  }
+
+  function showLoading() {
+    loadingOverlay.style.display = 'flex';
+  }
+
+  function hideLoading() {
+    loadingOverlay.style.display = 'none';
+  }
+
+  function decodeBase64(str) {
+    try {
+      return atob(str);
+    } catch (e) {
+      alert("视频地址解码失败");
+      return "";
+    }
+  }
+
+  function actuallyLoadSource(url, resumeTime, isM3U8) {
+    showLoading();
+    const fullUrl = url + "?t=" + Math.random();
+
+    if (isM3U8 && !isIOS() && typeof Hls !== 'undefined') {
+      hls = new Hls();
+      hls.loadSource(fullUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.currentTime = resumeTime;
+        video.play().catch(() => {});
+      });
+    } else {
+      video.src = fullUrl;
+      video.addEventListener('loadedmetadata', function onLoaded() {
+        video.removeEventListener('loadedmetadata', onLoaded);
+        video.currentTime = resumeTime;
+        video.play().catch(() => {});
+      });
+    }
+
+    video.addEventListener('loadedmetadata', () => {
+      video.controls = true;
+    });
+
+    clearInterval(saveInterval);
+    saveInterval = setInterval(() => {
+      if (!video.paused && !video.ended) {
+        saveProgress(url, video.currentTime);
+      }
+    }, 3000);
+  }
+
+  function loadVideoFromEncoded(encStr) {
+    const url = decodeBase64(encStr.trim());
+    if (!url) return;
+
+    const isM3U8 = url.includes(".m3u8");
+    const resumeTime = loadProgress(url);
+
+    showLoading();
+
+    video.pause();
+    video.removeAttribute('src');
+    video.removeAttribute('poster');
+    video.load();
+    video.currentTime = 0;
+    video.controls = false;
+
+    if (hls) {
+      hls.destroy();
+      hls = null;
+    }
+
+    setActiveButton(encStr);
+
+    setTimeout(() => {
+      actuallyLoadSource(url, resumeTime, isM3U8);
+    }, 100);
+  }
+
+  video.addEventListener('playing', hideLoading);
+  video.addEventListener('canplay', hideLoading);
+
+  const firstEnc = buttons[0].dataset.enc.trim();
+  loadVideoFromEncoded(firstEnc);
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      loadVideoFromEncoded(btn.dataset.enc.trim());
+    });
+  });
+</script>
+
+</body>
+</html>
