@@ -153,7 +153,7 @@
 
   function actuallyLoadSource(url, resumeTime, isM3U8) {
     showLoading();
-    currentUrl = url; // 记录当前地址
+    currentUrl = url;
 
     if (isM3U8 && !isIOS() && typeof Hls !== 'undefined') {
       hls = new Hls();
@@ -213,9 +213,12 @@
   const firstEnc = buttons[0].dataset.enc.trim();
   loadVideoFromEncoded(firstEnc);
 
-  // 切换视频
+  // 切换视频时先保存当前进度，再加载新视频
   buttons.forEach(btn => {
     btn.addEventListener('click', () => {
+      if (currentUrl) {
+        saveProgress(currentUrl, video.currentTime);
+      }
       loadVideoFromEncoded(btn.dataset.enc.trim());
     });
   });
