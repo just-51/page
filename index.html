@@ -122,13 +122,12 @@ function setActiveButton(enc){ buttons.forEach(btn=>btn.classList.toggle('active
 function showLoading(){ loadingOverlay.style.display='flex'; }
 function hideLoading(){ loadingOverlay.style.display='none'; }
 
-// ✅ 修复后的解码函数
+// 简化版 Base64 解码函数
 function decodeBase64(str){
   try {
-    const clean = str.replace(/[\r\n\s]/g, ""); // 去掉空格和换行
-    return decodeURIComponent(escape(atob(clean))); 
+    const clean = str.replace(/[\r\n\s]/g, "");
+    return atob(clean);
   } catch (e) {
-    console.error("解码失败:", e, str);
     alert("视频地址解码失败");
     return "";
   }
@@ -169,10 +168,10 @@ function loadVideo(url,resumeTime,isM3U8){
 }
 
 function loadVideoFromEncoded(encStr){
-  const url=decodeBase64(encStr.trim());
+  const url = decodeBase64(encStr.trim());
   if(!url) return;
-  const isM3U8=url.includes(".m3u8");
-  const resumeTime=loadProgress(url);
+  const isM3U8 = url.includes(".m3u8");
+  const resumeTime = loadProgress(url);
   setActiveButton(encStr);
   loadVideo(url,resumeTime,isM3U8);
 }
