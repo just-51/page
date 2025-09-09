@@ -45,7 +45,7 @@
     position: absolute;
     top: 0; left: 0;
     width: 100%; height: 100%;
-    background: rgba(0,0,0,0.4);
+    background: rgba(0,0,0,0.6);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -53,6 +53,7 @@
     color: white;
     font-size: 14px;
     pointer-events: none;
+    border-radius: 12px;
   }
   .spinner {
     border: 4px solid rgba(255,255,255,0.2);
@@ -115,20 +116,18 @@ const buttons = document.querySelectorAll('.video-button');
 const loadingOverlay = document.getElementById('loadingOverlay');
 let hls = null;
 
-function isIOS(){ return /iP(hone|od|ad)/.test(navigator.userAgent); }
 function saveProgress(url,time){ localStorage.setItem("progress_"+url,time.toFixed(1)); }
 function loadProgress(url){ const t=parseFloat(localStorage.getItem("progress_"+url)); return isNaN(t)?0:t; }
 function setActiveButton(enc){ buttons.forEach(btn=>btn.classList.toggle('active',btn.dataset.enc.trim()===enc)); }
-function showLoading(){ loadingOverlay.style.display='flex'; }
+function showLoading(){ loadingOverlay.style.display='flex'; loadingOverlay.innerHTML='<div class="spinner"></div>正在加载视频...'; }
 function hideLoading(){ loadingOverlay.style.display='none'; }
 
-// 简化版 Base64 解码函数
+// Base64 解码函数
 function decodeBase64(str){
   try {
     const clean = str.replace(/[\r\n\s]/g, "");
     return atob(clean);
   } catch (e) {
-    alert("视频地址解码失败");
     return "";
   }
 }
@@ -140,19 +139,32 @@ function loadVideo(url,resumeTime,isM3U8){
   video.load();
   if(hls){ hls.destroy(); hls=null; }
 
-  video.poster="loading.jpg";
-
-  if(isM3U8 && !isIOS() && typeof Hls!=='undefined'){
+  if(isM3U8 && typeof Hls !== 'undefined'){
     hls = new Hls({ maxBufferLength:30, maxMaxBufferLength:60 });
     hls.loadSource(url);
     hls.attachMedia(video);
+
     hls.on(Hls.Events.MANIFEST_PARSED, ()=>{
       video.currentTime = resumeTime;
       video.play().catch(()=>{});
       hideLoading();
     });
+
+    // 播放错误事件
+    hls.on(Hls.Events.ERROR, ()=>{
+      loadingOverlay.innerHTML = '<div>❌ 该视频无法播放</div>';
+      loadingOverlay.style.display='flex';
+    });
+
   } else {
-    video.src=url;
+    video.src = url;
+
+    // 监听播放错误
+    video.onerror = ()=>{
+      loadingOverlay.innerHTML = '<div>❌ 该视频无法播放</div>';
+      loadingOverlay.style.display='flex';
+    };
+
     video.addEventListener('loadedmetadata', function onLoaded(){
       video.removeEventListener('loadedmetadata', onLoaded);
       video.currentTime = resumeTime;
@@ -161,10 +173,10 @@ function loadVideo(url,resumeTime,isM3U8){
     });
   }
 
-  video.controls=true;
-  video.removeEventListener('timeupdate',video._saveHandler);
-  video._saveHandler=()=>saveProgress(url,video.currentTime);
-  video.addEventListener('timeupdate',video._saveHandler);
+  video.controls = true;
+  video.removeEventListener('timeupdate', video._saveHandler);
+  video._saveHandler = ()=>saveProgress(url, video.currentTime);
+  video.addEventListener('timeupdate', video._saveHandler);
 }
 
 function loadVideoFromEncoded(encStr){
