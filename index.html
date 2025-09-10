@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🎬 视频播放</title>
+<title>🎬 hello</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -50,21 +50,44 @@
     justify-content: center;
     align-items: center;
     flex-direction: column;
-    color: white;
-    font-size: 14px;
     pointer-events: none;
     border-radius: 12px;
   }
-  .spinner {
-    border: 4px solid rgba(255,255,255,0.2);
-    border-left-color: #00ff88;
+  .loader {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    border-top-color: #00ff88;
     border-radius: 50%;
-    width: 30px;
-    height: 30px;
-    animation: spin 1s linear infinite;
-    margin-bottom: 10px;
+    animation: spin 1s linear infinite, pulse 1.5s ease-in-out infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(0,255,136,0.6); }
+    50% { box-shadow: 0 0 15px 5px rgba(0,255,136,0.3); }
+  }
+  .loading-text {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #00ff88;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+  }
+  .dots span {
+    opacity: 0;
+    color: #00ff88;
+    text-shadow: 0 0 5px #00ff88, 0 0 10px #00ff88;
+    animation: blink 1.5s infinite;
+  }
+  .dots span:nth-child(1) { animation-delay: 0s; }
+  .dots span:nth-child(2) { animation-delay: 0.3s; }
+  .dots span:nth-child(3) { animation-delay: 0.6s; }
+  @keyframes blink {
+    0%, 20% { opacity: 0; }
+    30%, 80% { opacity: 1; }
+    100% { opacity: 0; }
+  }
   .video-list {
     display: flex;
     flex-wrap: wrap;
@@ -88,15 +111,15 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.0/dist/hls.min.js"></script>
 </head>
 <body>
-
 <div class="content-wrapper">
   <h1>🎬 请勿相信视频中的广告</h1>
-
   <div class="video-container">
     <video id="video" playsinline webkit-playsinline preload="auto" controls></video>
     <div class="loading-overlay" id="loadingOverlay">
-      <div class="spinner"></div>
-      正在加载视频...
+      <div class="loader"></div>
+      <div class="loading-text">
+        正在加载视频<span class="dots"><span>.</span><span>.</span><span>.</span></span>
+      </div>
     </div>
   </div>
 </div>
@@ -112,59 +135,38 @@
 
 <script>
 const video = document.getElementById('video');
-const buttons = document.querySelectorAll('.video-button')
+const buttons = document.querySelectorAll('.video-button');
 const loadingOverlay = document.getElementById('loadingOverlay');
 let hls = null;
 
 function saveProgress(url,time){ localStorage.setItem("progress_"+url,time.toFixed(1)); }
 function loadProgress(url){ const t=parseFloat(localStorage.getItem("progress_"+url)); return isNaN(t)?0:t; }
 function setActiveButton(enc){ buttons.forEach(btn=>btn.classList.toggle('active',btn.dataset.enc.trim()===enc)); }
-function showLoading(){ loadingOverlay.style.display='flex'; loadingOverlay.innerHTML='<div class="spinner"></div>正在加载视频...'; }
+function showLoading(){ loadingOverlay.style.display='flex'; }
 function hideLoading(){ loadingOverlay.style.display='none'; }
 
-// Base64 解码函数
+// Base64 解码
 function decodeBase64(str){
-  try {
-    const clean = str.replace(/[\r\n\s]/g, "");
-    return atob(clean);
-  } catch (e) {
-    return "";
-  }
+  try { return atob(str.replace(/[\r\n\s]/g, "")); }
+  catch(e){ return ""; }
 }
 
 function loadVideo(url,resumeTime,isM3U8){
-  showLoading();
   video.pause();
   video.removeAttribute('src');
   video.load();
   if(hls){ hls.destroy(); hls=null; }
-
   if(isM3U8 && typeof Hls !== 'undefined'){
     hls = new Hls({ maxBufferLength:30, maxMaxBufferLength:60 });
     hls.loadSource(url);
     hls.attachMedia(video);
-
     hls.on(Hls.Events.MANIFEST_PARSED, ()=>{
       video.currentTime = resumeTime;
       video.play().catch(()=>{});
       hideLoading();
     });
-
-    // 播放错误事件
-    hls.on(Hls.Events.ERROR, ()=>{
-      loadingOverlay.innerHTML = '<div>❌ 该视频无法播放</div>';
-      loadingOverlay.style.display='flex';
-    });
-
   } else {
     video.src = url;
-
-    // 监听播放错误
-    video.onerror = ()=>{
-      loadingOverlay.innerHTML = '<div>❌ 该视频无法播放</div>';
-      loadingOverlay.style.display='flex';
-    };
-
     video.addEventListener('loadedmetadata', function onLoaded(){
       video.removeEventListener('loadedmetadata', onLoaded);
       video.currentTime = resumeTime;
@@ -172,7 +174,6 @@ function loadVideo(url,resumeTime,isM3U8){
       hideLoading();
     });
   }
-
   video.controls = true;
   video.removeEventListener('timeupdate', video._saveHandler);
   video._saveHandler = ()=>saveProgress(url, video.currentTime);
@@ -183,8 +184,10 @@ function loadVideoFromEncoded(encStr){
   const url = decodeBase64(encStr.trim());
   if(!url) return;
   const isM3U8 = url.includes(".m3u8");
-  const resumeTime = loadProgress(url);
   setActiveButton(encStr);
+  // 点击按钮立即显示加载动画
+  showLoading();
+  const resumeTime = loadProgress(url);
   loadVideo(url,resumeTime,isM3U8);
 }
 
@@ -199,6 +202,5 @@ buttons.forEach(btn=>{
 video.addEventListener('playing',hideLoading);
 video.addEventListener('canplay',hideLoading);
 </script>
-
 </body>
 </html>
